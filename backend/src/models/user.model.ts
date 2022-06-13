@@ -8,6 +8,7 @@ export interface UserDocument extends mongoose.Document {
     password: string
     createdAt: Date
     updateAt: Date
+    comparePassword(enteredPassword: string): Promise<boolean>
 }
 
 const userSchema = new mongoose.Schema({
@@ -19,14 +20,22 @@ const userSchema = new mongoose.Schema({
 })
 
 userSchema.pre("save", async function (next) {
-    if (!this.isModified('password')) {
-        return next()
+    if (this.isModified('password')) {
+        const salt = await bcrypt.genSalt(config.get<number>('saltWorkFactor'))
+        const hash = await bcrypt.hashSync(this.password, salt);
+        this.password = hash
     }
-    const salt = await bcrypt.genSalt(config.get<number>('saltWorkFactor'))
-    const hash = await bcrypt.hashSync(this.password, salt);
-    this.password = hash
     return next()
 })
+
+userSchema.methods.comparePassword = async function (enteredPassword: string): Promise<boolean> {
+    try {
+        return bcrypt.compare(enteredPassword, this.password)
+    }
+    catch (error) {
+        return false
+    }
+}
 
 const User = mongoose.model("User", userSchema)
 
